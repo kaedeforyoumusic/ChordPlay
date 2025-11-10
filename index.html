@@ -27,7 +27,6 @@
   #chordNameWrap{display:flex;justify-content:center;margin-top:12px}
   #chordName{min-width:160px;text-align:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.85);box-shadow:0 6px 18px rgba(0,0,0,0.06);opacity:0;transform:translateY(6px);transition:opacity .28s,transform .28s;font-weight:700}
   #chordName.show{opacity:1;transform:translateY(0)}
-  footer{margin-top:14px;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
@@ -75,7 +74,7 @@
   </div>
 
   <div class="card">
-    <label>按鍵（1–7）</label>
+    <label>Chords</label>
     <div class="keys" id="keysRow">
       <button class="keybtn big" data-degree="1">1</button>
       <button class="keybtn big" data-degree="2">2</button>
@@ -89,26 +88,13 @@
   </div>
 
   <div class="card" style="margin-top:12px">
-    <label>音量 & 音色</label>
-    <div class="row" style="margin-top:6px">
-      <label style="width:60px">Volume</label>
-      <input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" style="flex:1"/>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <label style="width:60px">Tone</label>
-      <select id="toneSel" style="flex:1">
-        <option value="sample">Piano Sample</option>
-        <option value="sine">Pure Sine</option>
-      </select>
-    </div>
+    <label>Volume</label>
+    <input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" style="width:100%">
   </div>
-
-  <footer>Bass: C2–B2 | Chord tones: C3–B3 | Sample-based piano (C2–C5)</footer>
 </div>
 
 <script>
-/* ====== Settings & sample list ====== */
-/* sample files expected at: samples/piano/C2.wav ... C5.wav (sharps with #) */
+/* ===== Piano sample setup ===== */
 const sampleNotes = [
   "C2","C#2","D2","D#2","E2","F2","F#2","G2","G#2","A2","A#2","B2",
   "C3","C#3","D3","D#3","E3","F3","F#3","G3","G#3","A3","A#3","B3",
@@ -116,253 +102,134 @@ const sampleNotes = [
   "C5"
 ];
 const pianoSamples = {};
-let ctx = null;
-let masterGain = null;
-let samplesLoaded = false;
+let ctx=null, masterGain=null, samplesLoaded=false;
 
-/* ====== Audio init & sample loader ====== */
 function initAudioIfNeeded(){
   if(!ctx){
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
-    masterGain = ctx.createGain();
-    masterGain.gain.value = parseFloat(document.getElementById('volume').value || 0.7);
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    masterGain=ctx.createGain();
+    masterGain.gain.value=parseFloat(document.getElementById('volume').value||0.7);
     masterGain.connect(ctx.destination);
-    loadPianoSamples();
-  } else if(ctx.state === 'suspended'){
-    ctx.resume();
-  }
+    loadSamples();
+  }else if(ctx.state==='suspended'){ctx.resume();}
 }
-// Resume on first user interaction
-document.addEventListener('click', initAudioIfNeeded, { once: true });
-document.addEventListener('keydown', initAudioIfNeeded, { once: true });
+document.addEventListener('click',initAudioIfNeeded,{once:true});
+document.addEventListener('keydown',initAudioIfNeeded,{once:true});
 
-async function loadPianoSamples(){
+async function loadSamples(){
   let ok=0;
   for(const n of sampleNotes){
     try{
-      const res = await fetch(`samples/piano/${n}.wav`);
-      const ab = await res.arrayBuffer();
-      pianoSamples[n] = await ctx.decodeAudioData(ab);
+      const res=await fetch(`samples/piano/${n}.wav`);
+      const ab=await res.arrayBuffer();
+      pianoSamples[n]=await ctx.decodeAudioData(ab);
       ok++;
-    }catch(err){
-      console.warn("missing sample:", n);
-    }
+    }catch{}
   }
-  samplesLoaded = true;
+  samplesLoaded=true;
   console.log(`✅ Piano samples loaded (${ok}/${sampleNotes.length})`);
 }
 
-/* ====== Note <-> MIDI helpers ====== */
-const noteMap = {"C":0,"C#":1,"D":2,"D#":3,"E":4,"F":5,"F#":6,"G":7,"G#":8,"A":9,"A#":10,"B":11};
-function noteNameToMidi(name){
-  const m = name.match(/^([A-G]#?)(\d)$/);
-  if(!m) return null;
-  return 12 * (parseInt(m[2]) + 1) + noteMap[m[1]];
-}
-function midiToNoteName(midi){
-  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-  const octave = Math.floor(midi/12) - 1;
-  return `${names[midi % 12]}${octave}`;
-}
-
-/* find closest loaded sample for midi */
-function findClosestSampleForMidi(midi){
-  let best=null, minDiff=Infinity;
-  for(const name of Object.keys(pianoSamples)){
-    const sm = noteNameToMidi(name);
-    if(sm==null) continue;
-    const d = Math.abs(sm - midi);
-    if(d < minDiff){ minDiff = d; best = {name, midi:sm}; }
-  }
+const noteMap={"C":0,"C#":1,"D":2,"D#":3,"E":4,"F":5,"F#":6,"G":7,"G#":8,"A":9,"A#":10,"B":11};
+function noteToMidi(name){const m=name.match(/^([A-G]#?)(\d)$/);return 12*(+m[2]+1)+noteMap[m[1]];}
+function findClosestSample(midi){
+  let best=null,diff=1e9;
+  for(const k in pianoSamples){const m=noteToMidi(k);const d=Math.abs(m-midi);if(d<diff){diff=d;best={name:k,midi:m};}}
   return best;
 }
-
-/* play a sample pitched to a target midi */
-function playSampleAtMidi(midi, when=0, dur=2, vol=0.9){
-  if(!ctx || !samplesLoaded) return;
-  const hit = findClosestSampleForMidi(midi);
-  if(!hit) return;
-  const buf = pianoSamples[hit.name];
-  if(!buf) return;
-  const semitoneDiff = midi - hit.midi;
-  const playbackRate = Math.pow(2, semitoneDiff/12);
-
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.playbackRate.value = playbackRate;
-
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(vol, ctx.currentTime + when);
-  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + dur + 0.7);
-
+function playSample(midi,delay=0,dur=2,vol=0.8){
+  if(!samplesLoaded)return;
+  const s=findClosestSample(midi);if(!s)return;
+  const src=ctx.createBufferSource();
+  src.buffer=pianoSamples[s.name];
+  src.playbackRate.value=Math.pow(2,(midi-s.midi)/12);
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(vol,ctx.currentTime+delay);
+  g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+delay+dur+0.8);
   src.connect(g).connect(masterGain);
-  src.start(ctx.currentTime + when);
-  src.stop(ctx.currentTime + when + dur + 1.0);
+  src.start(ctx.currentTime+delay);
+  src.stop(ctx.currentTime+delay+dur+1);
 }
 
-/* fallback oscillator */
-function playOscillator(freq, when=0, dur=2, vol=0.6, type='triangle'){
-  if(!ctx) return;
-  const o = ctx.createOscillator();
-  const g = ctx.createGain();
-  o.type = type;
-  o.frequency.value = freq;
-  g.gain.setValueAtTime(0.0001, ctx.currentTime + when);
-  g.gain.linearRampToValueAtTime(vol, ctx.currentTime + when + 0.03);
-  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + dur + 0.6);
-  o.connect(g); g.connect(masterGain);
-  o.start(ctx.currentTime + when);
-  o.stop(ctx.currentTime + when + dur + 0.7);
+/* ===== Chord logic ===== */
+const chordIntervals={major:[0,4,7],minor:[0,3,7],dim:[0,3,6],aug:[0,4,8]};
+const scaleOffsets=[0,2,4,5,7,9,11];
+const BASS_MIN=36,BASS_MAX=47,CHORD_MIN=48,CHORD_MAX=59;
+
+function chooseBassMidi(root){let m=root-12;while(m>BASS_MAX)m-=12;while(m<BASS_MIN)m+=12;return Math.min(Math.max(m,BASS_MIN),BASS_MAX);}
+function compressChordMidi(m){let n=m;while(n<CHORD_MIN)n+=12;while(n>CHORD_MAX)n-=12;return n;}
+
+const sharpKeys=new Set([0,2,4,5,7,9,11]);
+const sharpNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const flatNames=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
+function keyUsesSharp(k){return sharpKeys.has(k);}
+function nameFor(s,sharp){s=((s%12)+12)%12;return sharp?sharpNames[s]:flatNames[s];}
+
+function showChordName(key,deg,qual){
+  const sharp=keyUsesSharp(key);
+  const root=(key+scaleOffsets[deg-1])%12;
+  const rname=nameFor(root,sharp);
+  const map={major:"maj",minor:"m",dim:"dim",aug:"aug"};
+  const txt=`${rname} ${map[qual]}`;
+  const el=document.getElementById('chordName');
+  el.textContent=txt;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),1000);
 }
 
-/* ====== Ranges & chord logic (UPDATED ranges) ====== */
-/* Confirmed ranges you requested:
-   Bass: C2 (36) .. B2 (47)
-   Chord tones: C3 (48) .. B3 (59)
-*/
-const BASS_MIN = 36, BASS_MAX = 47;   // C2 .. B2
-const CHORD_MIN = 48, CHORD_MAX = 59; // C3 .. B3
-
-const chordIntervals = { major:[0,4,7], minor:[0,3,7], dim:[0,3,6], aug:[0,4,8] };
-const scaleOffsets = [0,2,4,5,7,9,11];
-
-/* choose bass midi (prefer root-12, adjusted into BASS range) */
-function chooseBassMidi(rootMidi){
-  let cand = rootMidi - 12; // one octave down preferred
-  // shift octaves until within range
-  while(cand > BASS_MAX) cand -= 12;
-  while(cand < BASS_MIN) cand += 12;
-  // clamp
-  if(cand < BASS_MIN) cand = BASS_MIN;
-  if(cand > BASS_MAX) cand = BASS_MAX;
-  return cand;
+function playChord(deg){
+  if(!ctx)initAudioIfNeeded();
+  const key=parseInt(document.getElementById('keySelect').value);
+  const qual=document.querySelector('#qualityBtns .active').dataset.quality;
+  const root=60+key+scaleOffsets[deg-1];
+  const bass=chooseBassMidi(root);
+  const notes=chordIntervals[qual].map(i=>compressChordMidi(root+i));
+  playSample(bass,0,2.6,0.6);
+  notes.forEach((m,i)=>playSample(m,0.02*i,2.2,0.9));
+  showChordName(key,deg,qual);
 }
 
-/* compress chord tone to CHORD_MIN..CHORD_MAX */
-function compressToChordRange(m){
-  let mm = m;
-  while(mm < CHORD_MIN) mm += 12;
-  while(mm > CHORD_MAX) mm -= 12;
-  return mm;
-}
-
-/* ====== Key signature / chord name display ====== */
-const sharpsNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const flatsNames  = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
-const sharpsSet = new Set([7,2,9,4,11,6,1]); // keys that prefer sharps
-function keyUsesSharps(k){ if(k===0) return true; return sharpsSet.has(k); }
-function semitoneToName(s,useSharps){ s=((s%12)+12)%12; return useSharps?sharpsNames[s]:flatsNames[s]; }
-
-let chordNameTimeout = null;
-function showChordName(keySemitone, degree, quality){
-  const useSharps = keyUsesSharps(keySemitone);
-  const rootSemi = (keySemitone + scaleOffsets[degree-1]) % 12;
-  const rootName = semitoneToName(rootSemi, useSharps);
-  let suf = '';
-  if(quality === 'major') suf='maj';
-  else if(quality==='minor') suf='m';
-  else if(quality==='dim') suf='dim';
-  else if(quality==='aug') suf='aug';
-  const el = document.getElementById('chordName');
-  el.textContent = `${rootName} ${suf}`;
-  el.classList.add('show');
-  clearTimeout(chordNameTimeout);
-  chordNameTimeout = setTimeout(()=>el.classList.remove('show'),1000);
-}
-
-/* ====== Play chord by degree (uses samples when selected) ====== */
-function playChordByDegree(degree){
-  if(!ctx) initAudioIfNeeded();
-  const keyRoot = parseInt(document.getElementById('keySelect').value);
-  const quality = document.querySelector('#qualityBtns .active').dataset.quality;
-  const rootMidi = 60 + keyRoot + scaleOffsets[degree-1]; // central reference
-  const bassMidi = chooseBassMidi(rootMidi);
-  const intervals = chordIntervals[quality];
-  const chordMidis = intervals.map(i => compressToChordRange(rootMidi + i));
-  const toneSel = document.getElementById('toneSel').value;
-
-  // Play: bass first (lower), then chord tones with micro-delay
-  if(toneSel === 'sample' && samplesLoaded){
-    playSampleAtMidi(bassMidi, 0, 2.8, 0.55);
-    chordMidis.forEach((m,i) => playSampleAtMidi(m, 0.02*i, 2.2, 0.9));
-  } else {
-    // fallback oscillator
-    const bassFreq = 440 * Math.pow(2, (bassMidi - 69)/12);
-    playOscillator(bassFreq, 0, 2.5, 0.45, 'sine');
-    chordMidis.forEach((m,i) => {
-      const f = 440 * Math.pow(2, (m - 69)/12);
-      playOscillator(f, 0.02*i, 2, 0.6, 'triangle');
-    });
-  }
-
-  showChordName(keyRoot, degree, quality);
-}
-
-/* ====== UI bindings (buttons + keyboard) ====== */
-document.getElementById('keysRow').addEventListener('click', e=>{
-  const b = e.target.closest('button[data-degree]');
-  if(!b) return;
-  const deg = parseInt(b.dataset.degree);
-  b.classList.add('active'); setTimeout(()=>b.classList.remove('active'),160);
-  playChordByDegree(deg);
+document.getElementById('keysRow').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-degree]');if(!b)return;
+  b.classList.add('active');setTimeout(()=>b.classList.remove('active'),160);
+  playChord(parseInt(b.dataset.degree));
 });
-window.addEventListener('keydown', e=>{
-  if(e.key >= '1' && e.key <= '7') { playChordByDegree(parseInt(e.key)); }
-});
-document.getElementById('qualityBtns').addEventListener('click', e=>{
-  const b = e.target.closest('button[data-quality]'); if(!b) return;
+window.addEventListener('keydown',e=>{if(e.key>='1'&&e.key<='7')playChord(parseInt(e.key));});
+document.getElementById('qualityBtns').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-quality]');if(!b)return;
   document.querySelectorAll('#qualityBtns button').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');
 });
-document.getElementById('keySelect').addEventListener('change', e=>{
-  document.getElementById('currentKey').textContent = e.target.options[e.target.selectedIndex].text;
+document.getElementById('keySelect').addEventListener('change',e=>{
+  document.getElementById('currentKey').textContent=e.target.options[e.target.selectedIndex].text;
+});
+document.getElementById('volume').addEventListener('input',()=>{
+  if(masterGain)masterGain.gain.value=parseFloat(document.getElementById('volume').value);
 });
 
-/* ====== Volume control ====== */
-document.getElementById('volume').addEventListener('input', ()=>{
-  const v = parseFloat(document.getElementById('volume').value);
-  if(masterGain) masterGain.gain.value = v;
-});
-
-/* ====== Metronome with downbeat & beats-per-bar ====== */
-let metroInt = null, beatCount = 0;
-const beatDot = document.getElementById('beat');
-const metroBtn = document.getElementById('metroToggle');
-
-function playClick(isDownbeat){
-  if(!ctx) return;
-  const o = ctx.createOscillator(), g = ctx.createGain();
-  o.type = 'square';
-  o.frequency.value = isDownbeat ? 1400 : 1000;
-  g.gain.value = isDownbeat ? 0.28 : 0.18;
-  o.connect(g); g.connect(masterGain);
-  o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
-  o.stop(ctx.currentTime + 0.07);
-}
-
-metroBtn.addEventListener('click', ()=>{
-  if(metroInt){
-    clearInterval(metroInt); metroInt = null; beatDot.classList.remove('on','downbeat'); metroBtn.textContent='Start'; beatCount=0; return;
-  }
+/* ===== Metronome ===== */
+let metroInt=null,beatCount=0;
+const beatDot=document.getElementById('beat');
+document.getElementById('metroToggle').addEventListener('click',()=>{
+  if(metroInt){clearInterval(metroInt);metroInt=null;beatDot.classList.remove('on','downbeat');document.getElementById('metroToggle').textContent='Start';beatCount=0;return;}
   initAudioIfNeeded();
-  const bpm = parseInt(document.getElementById('bpm').value || 80);
-  const interval = 60000 / bpm;
-  const beatsPerBar = parseInt(document.getElementById('beatsPerBar').value || 4);
-  metroInt = setInterval(()=>{
-    beatCount = (beatCount % beatsPerBar) + 1;
-    const isDown = (beatCount === 1);
-    beatDot.classList.remove('on','downbeat');
-    void beatDot.offsetWidth;
-    beatDot.classList.add(isDown ? 'downbeat' : 'on');
-    playClick(isDown);
-  }, interval);
-  metroBtn.textContent = 'Stop';
+  const bpm=parseInt(document.getElementById('bpm').value||80);
+  const interval=60000/bpm;
+  const beatsPerBar=parseInt(document.getElementById('beatsPerBar').value||4);
+  metroInt=setInterval(()=>{
+    beatCount=(beatCount%beatsPerBar)+1;
+    const down=(beatCount===1);
+    beatDot.classList.remove('on','downbeat');void beatDot.offsetWidth;
+    beatDot.classList.add(down?'downbeat':'on');
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=down?1400:1000;
+    g.gain.value=down?0.28:0.18;
+    o.connect(g);g.connect(masterGain);
+    o.start();g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.06);
+    o.stop(ctx.currentTime+0.07);
+  },interval);
+  document.getElementById('metroToggle').textContent='Stop';
 });
-
-/* ====== Init UI text ====== */
-document.getElementById('currentKey').textContent = document.getElementById('keySelect').options[0].text;
 </script>
 </body>
 </html>
 
-<!-- trigger deploy -->
