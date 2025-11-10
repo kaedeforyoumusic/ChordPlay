@@ -209,27 +209,36 @@ document.getElementById('volume').addEventListener('input',()=>{
 });
 
 /* ===== Metronome ===== */
-let metroInt=null,beatCount=0;
-const beatDot=document.getElementById('beat');
-document.getElementById('metroToggle').addEventListener('click',()=>{
-  if(metroInt){clearInterval(metroInt);metroInt=null;beatDot.classList.remove('on','downbeat');document.getElementById('metroToggle').textContent='Start';beatCount=0;return;}
-  initAudioIfNeeded();
-  const bpm=parseInt(document.getElementById('bpm').value||80);
-  const interval=60000/bpm;
-  const beatsPerBar=parseInt(document.getElementById('beatsPerBar').value||4);
-  metroInt=setInterval(()=>{
-    beatCount=(beatCount%beatsPerBar)+1;
-    const down=(beatCount===1);
-    beatDot.classList.remove('on','downbeat');void beatDot.offsetWidth;
-    beatDot.classList.add(down?'downbeat':'on');
-    const o=ctx.createOscillator(),g=ctx.createGain();
-    o.type='square';o.frequency.value=down?1400:1000;
-    g.gain.value=down?0.28:0.18;
-    o.connect(g);g.connect(masterGain);
-    o.start();g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.06);
-    o.stop(ctx.currentTime+0.07);
-  },interval);
-  document.getElementById('metroToggle').textContent='Stop';
+let metronomeRunning = false;
+let metronomeInterval;
+
+function playClick(isDownbeat) {
+  const osc = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  osc.connect(gainNode).connect(audioCtx.destination);
+  osc.frequency.value = isDownbeat ? 1000 : 800;
+  gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.1);
+}
+
+document.getElementById("metronome").addEventListener("click", () => {
+  if (!metronomeRunning) {
+    const bpm = parseInt(document.getElementById("bpm").value);
+    const interval = (60 / bpm) * 1000;
+    let count = 0;
+    metronomeInterval = setInterval(() => {
+      playClick(count % 4 === 0);
+      count++;
+    }, interval);
+    document.getElementById("metronome").textContent = "Stop Metronome";
+    metronomeRunning = true;
+  } else {
+    clearInterval(metronomeInterval);
+    document.getElementById("metronome").textContent = "Start Metronome";
+    metronomeRunning = false;
+  }
 });
 </script>
 </body>
@@ -238,6 +247,7 @@ document.getElementById('metroToggle').addEventListener('click',()=>{
 
 
 <!-- trigger deploy -->
+
 
 
 
