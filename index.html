@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ChordPlay — The Interactive Numbered Chord Player</title>
+<style>
+  :root{--bg:#f8f7f5;--card:#fff;--accent:#89b6a5;--muted:#666;}
+  body{font-family:"Inter","Noto Sans TC",system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:#111;margin:0;padding:18px;display:flex;justify-content:center}
+  .app{max-width:980px;width:100%}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  h1{font-size:18px;margin:0}
+  .hint{font-size:13px;color:var(--muted)}
+  .controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .card{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.06);min-width:180px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  select,input[type=number]{width:100%;padding:8px;border-radius:8px;border:1px solid #eee}
+  .row{display:flex;gap:8px;align-items:center}
+  .keybtn{padding:10px 14px;border:none;border-radius:10px;background:#f2f2f7;cursor:pointer}
+  .keybtn.active{background:var(--accent);color:white}
+  .keys{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .big{font-size:16px;min-width:48px}
+  .metronome{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .meter{width:12px;height:12px;border-radius:50%;background:#ccc;transition:background .08s}
+  .meter.on{background:#e63946}
+  .meter.downbeat{background:#2a9d8f}
+  #chordNameWrap{display:flex;justify-content:center;margin-top:12px}
+  #chordName{min-width:160px;text-align:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.85);box-shadow:0 6px 18px rgba(0,0,0,0.06);opacity:0;transform:translateY(6px);transition:opacity .28s,transform .28s;font-weight:700}
+  #chordName.show{opacity:1;transform:translateY(0)}
+  footer{margin-top:14px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>ChordPlay — The Interactive Numbered Chord Player</h1>
+    <div class="hint">Click anywhere to enable sound</div>
+  </header>
+
+  <div class="controls">
+    <div class="card">
+      <label>Key</label>
+      <select id="keySelect">
+        <option value="0">C</option><option value="1">C# / Db</option><option value="2">D</option>
+        <option value="3">D# / Eb</option><option value="4">E</option><option value="5">F</option>
+        <option value="6">F# / Gb</option><option value="7">G</option><option value="8">G# / Ab</option>
+        <option value="9">A</option><option value="10">A# / Bb</option><option value="11">B</option>
+      </select>
+      <div style="font-size:13px;color:var(--muted);margin-top:8px">Current key: <span id="currentKey">C</span></div>
+    </div>
+
+    <div class="card">
+      <label>Chord Type</label>
+      <div class="row" id="qualityBtns">
+        <button class="keybtn active" data-quality="major">Major</button>
+        <button class="keybtn" data-quality="minor">Minor</button>
+        <button class="keybtn" data-quality="dim">Dim</button>
+        <button class="keybtn" data-quality="aug">Aug</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>Metronome</label>
+      <div class="metronome">
+        <input id="bpm" type="number" value="80" min="30" max="240" style="width:72px"/>
+        <select id="beatsPerBar" style="width:72px">
+          <option value="2">2</option><option value="3">3</option><option value="4" selected>4</option>
+          <option value="5">5</option><option value="6">6</option><option value="7">7</option>
+          <option value="8">8</option>
+        </select>
+        <button id="metroToggle" class="keybtn">Start</button>
+        <div id="beat" class="meter"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>按鍵（1–7）</label>
+    <div class="keys" id="keysRow">
+      <button class="keybtn big" data-degree="1">1</button>
+      <button class="keybtn big" data-degree="2">2</button>
+      <button class="keybtn big" data-degree="3">3</button>
+      <button class="keybtn big" data-degree="4">4</button>
+      <button class="keybtn big" data-degree="5">5</button>
+      <button class="keybtn big" data-degree="6">6</button>
+      <button class="keybtn big" data-degree="7">7</button>
+    </div>
+    <div id="chordNameWrap"><div id="chordName"></div></div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <label>音量 & 音色</label>
+    <div class="row" style="margin-top:6px">
+      <label style="width:60px">Volume</label>
+      <input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" style="flex:1"/>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label style="width:60px">Tone</label>
+      <select id="toneSel" style="flex:1">
+        <option value="sample">Piano Sample</option>
+        <option value="sine">Pure Sine</option>
+      </select>
+    </div>
+  </div>
+
+  <footer>Bass: C2–B2 | Chord tones: C3–B3 | Sample-based piano (C2–C5)</footer>
+</div>
+
+<script>
+/* ====== Settings & sample list ====== */
+/* sample files expected at: samples/piano/C2.wav ... C5.wav (sharps with #) */
+const sampleNotes = [
+  "C2","C#2","D2","D#2","E2","F2","F#2","G2","G#2","A2","A#2","B2",
+  "C3","C#3","D3","D#3","E3","F3","F#3","G3","G#3","A3","A#3","B3",
+  "C4","C#4","D4","D#4","E4","F4","F#4","G4","G#4","A4","A#4","B4",
+  "C5"
+];
+const pianoSamples = {};
+let ctx = null;
+let masterGain = null;
+let samplesLoaded = false;
+
+/* ====== Audio init & sample loader ====== */
+function initAudioIfNeeded(){
+  if(!ctx){
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = ctx.createGain();
+    masterGain.gain.value = parseFloat(document.getElementById('volume').value || 0.7);
+    masterGain.connect(ctx.destination);
+    loadPianoSamples();
+  } else if(ctx.state === 'suspended'){
+    ctx.resume();
+  }
+}
+// Resume on first user interaction
+document.addEventListener('click', initAudioIfNeeded, { once: true });
+document.addEventListener('keydown', initAudioIfNeeded, { once: true });
+
+async function loadPianoSamples(){
+  let ok=0;
+  for(const n of sampleNotes){
+    try{
+      const res = await fetch(`samples/piano/${n}.wav`);
+      const ab = await res.arrayBuffer();
+      pianoSamples[n] = await ctx.decodeAudioData(ab);
+      ok++;
+    }catch(err){
+      console.warn("missing sample:", n);
+    }
+  }
+  samplesLoaded = true;
+  console.log(`✅ Piano samples loaded (${ok}/${sampleNotes.length})`);
+}
+
+/* ====== Note <-> MIDI helpers ====== */
+const noteMap = {"C":0,"C#":1,"D":2,"D#":3,"E":4,"F":5,"F#":6,"G":7,"G#":8,"A":9,"A#":10,"B":11};
+function noteNameToMidi(name){
+  const m = name.match(/^([A-G]#?)(\d)$/);
+  if(!m) return null;
+  return 12 * (parseInt(m[2]) + 1) + noteMap[m[1]];
+}
+function midiToNoteName(midi){
+  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const octave = Math.floor(midi/12) - 1;
+  return `${names[midi % 12]}${octave}`;
+}
+
+/* find closest loaded sample for midi */
+function findClosestSampleForMidi(midi){
+  let best=null, minDiff=Infinity;
+  for(const name of Object.keys(pianoSamples)){
+    const sm = noteNameToMidi(name);
+    if(sm==null) continue;
+    const d = Math.abs(sm - midi);
+    if(d < minDiff){ minDiff = d; best = {name, midi:sm}; }
+  }
+  return best;
+}
+
+/* play a sample pitched to a target midi */
+function playSampleAtMidi(midi, when=0, dur=2, vol=0.9){
+  if(!ctx || !samplesLoaded) return;
+  const hit = findClosestSampleForMidi(midi);
+  if(!hit) return;
+  const buf = pianoSamples[hit.name];
+  if(!buf) return;
+  const semitoneDiff = midi - hit.midi;
+  const playbackRate = Math.pow(2, semitoneDiff/12);
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = playbackRate;
+
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(vol, ctx.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + dur + 0.7);
+
+  src.connect(g).connect(masterGain);
+  src.start(ctx.currentTime + when);
+  src.stop(ctx.currentTime + when + dur + 1.0);
+}
+
+/* fallback oscillator */
+function playOscillator(freq, when=0, dur=2, vol=0.6, type='triangle'){
+  if(!ctx) return;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, ctx.currentTime + when);
+  g.gain.linearRampToValueAtTime(vol, ctx.currentTime + when + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + when + dur + 0.6);
+  o.connect(g); g.connect(masterGain);
+  o.start(ctx.currentTime + when);
+  o.stop(ctx.currentTime + when + dur + 0.7);
+}
+
+/* ====== Ranges & chord logic (UPDATED ranges) ====== */
+/* Confirmed ranges you requested:
+   Bass: C2 (36) .. B2 (47)
+   Chord tones: C3 (48) .. B3 (59)
+*/
+const BASS_MIN = 36, BASS_MAX = 47;   // C2 .. B2
+const CHORD_MIN = 48, CHORD_MAX = 59; // C3 .. B3
+
+const chordIntervals = { major:[0,4,7], minor:[0,3,7], dim:[0,3,6], aug:[0,4,8] };
+const scaleOffsets = [0,2,4,5,7,9,11];
+
+/* choose bass midi (prefer root-12, adjusted into BASS range) */
+function chooseBassMidi(rootMidi){
+  let cand = rootMidi - 12; // one octave down preferred
+  // shift octaves until within range
+  while(cand > BASS_MAX) cand -= 12;
+  while(cand < BASS_MIN) cand += 12;
+  // clamp
+  if(cand < BASS_MIN) cand = BASS_MIN;
+  if(cand > BASS_MAX) cand = BASS_MAX;
+  return cand;
+}
+
+/* compress chord tone to CHORD_MIN..CHORD_MAX */
+function compressToChordRange(m){
+  let mm = m;
+  while(mm < CHORD_MIN) mm += 12;
+  while(mm > CHORD_MAX) mm -= 12;
+  return mm;
+}
+
+/* ====== Key signature / chord name display ====== */
+const sharpsNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const flatsNames  = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const sharpsSet = new Set([7,2,9,4,11,6,1]); // keys that prefer sharps
+function keyUsesSharps(k){ if(k===0) return true; return sharpsSet.has(k); }
+function semitoneToName(s,useSharps){ s=((s%12)+12)%12; return useSharps?sharpsNames[s]:flatsNames[s]; }
+
+let chordNameTimeout = null;
+function showChordName(keySemitone, degree, quality){
+  const useSharps = keyUsesSharps(keySemitone);
+  const rootSemi = (keySemitone + scaleOffsets[degree-1]) % 12;
+  const rootName = semitoneToName(rootSemi, useSharps);
+  let suf = '';
+  if(quality === 'major') suf='maj';
+  else if(quality==='minor') suf='m';
+  else if(quality==='dim') suf='dim';
+  else if(quality==='aug') suf='aug';
+  const el = document.getElementById('chordName');
+  el.textContent = `${rootName} ${suf}`;
+  el.classList.add('show');
+  clearTimeout(chordNameTimeout);
+  chordNameTimeout = setTimeout(()=>el.classList.remove('show'),1000);
+}
+
+/* ====== Play chord by degree (uses samples when selected) ====== */
+function playChordByDegree(degree){
+  if(!ctx) initAudioIfNeeded();
+  const keyRoot = parseInt(document.getElementById('keySelect').value);
+  const quality = document.querySelector('#qualityBtns .active').dataset.quality;
+  const rootMidi = 60 + keyRoot + scaleOffsets[degree-1]; // central reference
+  const bassMidi = chooseBassMidi(rootMidi);
+  const intervals = chordIntervals[quality];
+  const chordMidis = intervals.map(i => compressToChordRange(rootMidi + i));
+  const toneSel = document.getElementById('toneSel').value;
+
+  // Play: bass first (lower), then chord tones with micro-delay
+  if(toneSel === 'sample' && samplesLoaded){
+    playSampleAtMidi(bassMidi, 0, 2.8, 0.55);
+    chordMidis.forEach((m,i) => playSampleAtMidi(m, 0.02*i, 2.2, 0.9));
+  } else {
+    // fallback oscillator
+    const bassFreq = 440 * Math.pow(2, (bassMidi - 69)/12);
+    playOscillator(bassFreq, 0, 2.5, 0.45, 'sine');
+    chordMidis.forEach((m,i) => {
+      const f = 440 * Math.pow(2, (m - 69)/12);
+      playOscillator(f, 0.02*i, 2, 0.6, 'triangle');
+    });
+  }
+
+  showChordName(keyRoot, degree, quality);
+}
+
+/* ====== UI bindings (buttons + keyboard) ====== */
+document.getElementById('keysRow').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-degree]');
+  if(!b) return;
+  const deg = parseInt(b.dataset.degree);
+  b.classList.add('active'); setTimeout(()=>b.classList.remove('active'),160);
+  playChordByDegree(deg);
+});
+window.addEventListener('keydown', e=>{
+  if(e.key >= '1' && e.key <= '7') { playChordByDegree(parseInt(e.key)); }
+});
+document.getElementById('qualityBtns').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-quality]'); if(!b) return;
+  document.querySelectorAll('#qualityBtns button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+});
+document.getElementById('keySelect').addEventListener('change', e=>{
+  document.getElementById('currentKey').textContent = e.target.options[e.target.selectedIndex].text;
+});
+
+/* ====== Volume control ====== */
+document.getElementById('volume').addEventListener('input', ()=>{
+  const v = parseFloat(document.getElementById('volume').value);
+  if(masterGain) masterGain.gain.value = v;
+});
+
+/* ====== Metronome with downbeat & beats-per-bar ====== */
+let metroInt = null, beatCount = 0;
+const beatDot = document.getElementById('beat');
+const metroBtn = document.getElementById('metroToggle');
+
+function playClick(isDownbeat){
+  if(!ctx) return;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'square';
+  o.frequency.value = isDownbeat ? 1400 : 1000;
+  g.gain.value = isDownbeat ? 0.28 : 0.18;
+  o.connect(g); g.connect(masterGain);
+  o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
+  o.stop(ctx.currentTime + 0.07);
+}
+
+metroBtn.addEventListener('click', ()=>{
+  if(metroInt){
+    clearInterval(metroInt); metroInt = null; beatDot.classList.remove('on','downbeat'); metroBtn.textContent='Start'; beatCount=0; return;
+  }
+  initAudioIfNeeded();
+  const bpm = parseInt(document.getElementById('bpm').value || 80);
+  const interval = 60000 / bpm;
+  const beatsPerBar = parseInt(document.getElementById('beatsPerBar').value || 4);
+  metroInt = setInterval(()=>{
+    beatCount = (beatCount % beatsPerBar) + 1;
+    const isDown = (beatCount === 1);
+    beatDot.classList.remove('on','downbeat');
+    void beatDot.offsetWidth;
+    beatDot.classList.add(isDown ? 'downbeat' : 'on');
+    playClick(isDown);
+  }, interval);
+  metroBtn.textContent = 'Stop';
+});
+
+/* ====== Init UI text ====== */
+document.getElementById('currentKey').textContent = document.getElementById('keySelect').options[0].text;
+</script>
+</body>
+</html>
