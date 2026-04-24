@@ -104,6 +104,7 @@
 </div>
 
 <script>
+
 /* ===== Piano sample setup ===== */
 const sampleNotes = [
   "C2","C#2","D2","D#2","E2","F2","F#2","G2","G#2","A2","A#2","B2",
@@ -158,34 +159,37 @@ function playSample(midi,delay=0,dur=2,vol=0.8){
   src.connect(g).connect(masterGain);
   src.start(ctx.currentTime+delay);
   src.stop(ctx.currentTime+delay+dur+1);
+}
 
+let inv1Held = false;
+let inv2Held = false;
+
+function bindHold(btn, onDown, onUp) {
+  btn.addEventListener("mousedown", onDown);
+  btn.addEventListener("mouseup", onUp);
+  btn.addEventListener("mouseleave", onUp);
+
+  btn.addEventListener("touchstart", e => {
+    e.preventDefault();
+    onDown();
+  });
+
+  btn.addEventListener("touchend", onUp);
 }
 
 window.addEventListener("load", () => {
   const inv1Btn = document.getElementById("inv1");
   const inv2Btn = document.getElementById("inv2");
 
-  inv1Btn.addEventListener("click", () => {
-    // If inv1 is already active, turn it off. Otherwise, turn it on and turn inv2 off.
-    inv1Held = !inv1Held;
-    if (inv1Held) inv2Held = false;
-    
-    // Update visual styles
-    inv1Btn.classList.toggle("active", inv1Held);
-    inv2Btn.classList.toggle("active", inv2Held);
-  });
+  bindHold(inv1Btn,
+    () => { inv1Held = true; inv2Held = false; },
+    () => { inv1Held = false; }
+  );
 
-  inv2Btn.addEventListener("click", () => {
-    // If inv2 is already active, turn it off. Otherwise, turn it on and turn inv1 off.
-    inv2Held = !inv2Held;
-    if (inv2Held) inv1Held = false;
-
-    // Update visual styles
-    inv1Btn.classList.toggle("active", inv1Held);
-    inv2Btn.classList.toggle("active", inv2Held);
-  });
-});
-
+  bindHold(inv2Btn,
+    () => { inv2Held = true; inv1Held = false; },
+    () => { inv2Held = false; }
+  );
 });
 
   
