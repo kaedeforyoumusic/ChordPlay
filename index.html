@@ -178,8 +178,9 @@ function bindHold(btn, onDown, onUp) {
 
 window.addEventListener("load", () => {
   const inv1Btn = document.getElementById("inv1");
-  const inv2Btn = document.getElementById("inv2");
+const inv2Btn = document.getElementById("inv2");
 
+if (inv1Btn && inv2Btn) {
   bindHold(inv1Btn,
     () => { inv1Held = true; inv2Held = false; },
     () => { inv1Held = false; }
@@ -189,6 +190,7 @@ window.addEventListener("load", () => {
     () => { inv2Held = true; inv1Held = false; },
     () => { inv2Held = false; }
   );
+}
 });
   
 /* ===== Chord logic ===== */
