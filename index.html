@@ -207,29 +207,33 @@ function keyUsesSharp(k){return sharpKeys.has(k);}
 function nameFor(s,sharp){s=((s%12)+12)%12;return sharp?sharpNames[s]:flatNames[s];}
 
 function showChordName(key,deg,qual){
-  const sharp=keyUsesSharp(key);
-  const root=(key+scaleOffsets[deg-1])%12;
-  const rname=nameFor(root,sharp);
-  const map={major:"maj",minor:"m",dim:"dim",aug:"aug"};
+  const sharp = keyUsesSharp(key);
+  const root = (key + scaleOffsets[deg-1]) % 12;
+  const rname = nameFor(root, sharp);
+
+  const map = {
+    major: "maj",
+    minor: "min",
+    dim: "dim",
+    aug: "aug"
+  };
+
   const intervals = chordIntervals[qual];
 
-  let bassName = "";
+  let txt = `${rname} ${map[qual]}`;
 
   if (inv1Held) {
-    const b = (root + intervals[1]) % 12;
-    bassName = nameFor(b, sharp);
+    const bass = (root + intervals[1]) % 12;
+    txt = `${rname} ${map[qual]} / ${nameFor(bass, sharp)}`;
   } else if (inv2Held) {
-    const b = (root + intervals[2]) % 12;
-    bassName = nameFor(b, sharp);
+    const bass = (root + intervals[2]) % 12;
+    txt = `${rname} ${map[qual]} / ${nameFor(bass, sharp)}`;
   }
 
-  const txt = bassName ? `${rname}/${bassName}` : rname;
-
-  const el=document.getElementById('chordName');
-  el.textContent=txt;
+  const el = document.getElementById('chordName');
+  el.textContent = txt;
   el.classList.add('show');
   setTimeout(()=>el.classList.remove('show'),1000);
-
 }
 
 function playChord(deg){
