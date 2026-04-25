@@ -228,13 +228,13 @@ function showChordName(key,deg,qual){
 
   let txt = `${rname} ${map[qual]}`;
 
-  if (inv1Held) {
-    const bass = (root + intervals[1]) % 12;
-    txt = `${rname} ${map[qual]} / ${nameFor(bass, sharp)}`;
-  } else if (inv2Held) {
-    const bass = (root + intervals[2]) % 12;
-    txt = `${rname} ${map[qual]} / ${nameFor(bass, sharp)}`;
-  }
+  if (inversionMode === 1) {
+  const bass = (root + intervals[1]) % 12;
+  txt = `${rname} ${map[qual]} / ${nameFor(bass, sharp)}`;
+} else if (inversionMode === 2) {
+  const bass = (root + intervals[2]) % 12;
+  txt = `${rname} ${map[qual]} / ${nameFor(bass, sharp)}`;
+}
 
   const el = document.getElementById('chordName');
   el.textContent = txt;
@@ -249,12 +249,12 @@ function playChord(deg){
   const root=60+key+scaleOffsets[deg-1];
   let bass;
 
-if (inv1Held) {
+if (inversionMode === 1) {
   bass = chooseBassMidi(root + chordIntervals[qual][1]); // 3rd
-} else if (inv2Held) {
+} else if (inversionMode === 2) {
   bass = chooseBassMidi(root + chordIntervals[qual][2]); // 5th
 } else {
-  bass = chooseBassMidi(root);
+  bass = chooseBassMidi(root); // root
 }
   const notes=chordIntervals[qual].map(i=>compressChordMidi(root+i));
   playSample(bass,0,2.6,0.6);
@@ -303,6 +303,43 @@ document.getElementById('metroToggle').addEventListener('click',()=>{
   },interval);
   document.getElementById('metroToggle').textContent='Stop';
 });
+
+// ===== Inversion mode (CLICK toggle) =====
+let inversionMode = 0;
+// 0 = root, 1 = 1st inversion, 2 = 2nd inversion
+
+window.addEventListener("DOMContentLoaded", () => {
+
+  const inv1Btn = document.getElementById("inv1");
+  const inv2Btn = document.getElementById("inv2");
+
+  if (!inv1Btn || !inv2Btn) return;
+
+  inv1Btn.addEventListener("click", () => {
+    if (inversionMode === 1) {
+      inversionMode = 0;
+      inv1Btn.classList.remove("active");
+    } else {
+      inversionMode = 1;
+      inv1Btn.classList.add("active");
+      inv2Btn.classList.remove("active");
+    }
+  });
+
+  inv2Btn.addEventListener("click", () => {
+    if (inversionMode === 2) {
+      inversionMode = 0;
+      inv2Btn.classList.remove("active");
+    } else {
+      inversionMode = 2;
+      inv2Btn.classList.add("active");
+      inv1Btn.classList.remove("active");
+    }
+  });
+
+});
+
+  
 </script>
 </body>
 </html>
