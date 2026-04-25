@@ -220,7 +220,7 @@ if (inversionMode === 1) {
   bass = chooseBassMidi(root);
 }
   const notes=chordIntervals[qual].map(i=>compressChordMidi(root+i));
-  playSample(bass,0,2.6,0.6);
+  playSample(bass,0,2.6,0.85);
   notes.forEach((m,i)=>playSample(m,0.02*i,2.2,0.9));
   showChordName(key,deg,qual);
 }
