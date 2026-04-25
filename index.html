@@ -160,37 +160,42 @@ function playSample(midi,delay=0,dur=2,vol=0.8){
   src.start(ctx.currentTime+delay);
   src.stop(ctx.currentTime+delay+dur+1);
 }
+// ===== Inversion mode (CLICK toggle) =====
+let inversionMode = 0;
+// 0 = root, 1 = 1st inversion, 2 = 2nd inversion
 
-let inv1Held = false;
-let inv2Held = false;
+const inv1Btn = document.getElementById("inv1");
+const inv2Btn = document.getElementById("inv2");
 
-function bindHold(btn, onDown, onUp) {
-  btn.addEventListener("mousedown", onDown);
-  btn.addEventListener("mouseup", onUp);
-  btn.addEventListener("mouseleave", onUp);
+if (inv1Btn && inv2Btn) {
 
-  btn.addEventListener("touchstart", e => {
-    e.preventDefault();
-    onDown();
+  inv1Btn.addEventListener("click", () => {
+    if (inversionMode === 1) {
+      // 關掉 → 回 root
+      inversionMode = 0;
+      inv1Btn.classList.remove("active");
+    } else {
+      // 開 1st → 同時關 2nd
+      inversionMode = 1;
+      inv1Btn.classList.add("active");
+      inv2Btn.classList.remove("active");
+    }
   });
 
-  btn.addEventListener("touchend", onUp);
+  inv2Btn.addEventListener("click", () => {
+    if (inversionMode === 2) {
+      // 關掉 → 回 root
+      inversionMode = 0;
+      inv2Btn.classList.remove("active");
+    } else {
+      // 開 2nd → 同時關 1st
+      inversionMode = 2;
+      inv2Btn.classList.add("active");
+      inv1Btn.classList.remove("active");
+    }
+  });
+
 }
-
-window.addEventListener("load", () => {
-  const inv1Btn = document.getElementById("inv1");
-  const inv2Btn = document.getElementById("inv2");
-
-  bindHold(inv1Btn,
-    () => { inv1Held = true; inv2Held = false; },
-    () => { inv1Held = false; }
-  );
-
-  bindHold(inv2Btn,
-    () => { inv2Held = true; inv1Held = false; },
-    () => { inv2Held = false; }
-  );
-});
 
   
 /* ===== Chord logic ===== */
